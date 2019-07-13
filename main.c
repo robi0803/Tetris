@@ -12,7 +12,9 @@ const int FPS = 60;
 const int MaxFPS = 1000 / FPS;
 int pressedKeys[SDL_NUM_SCANCODES];
 int releasedKeys[SDL_NUM_SCANCODES];
-int timeElapsed, fallTime, quit, level;
+int slowFallTime, fastFallTime, fallTime;
+int timeElapsed, quit, level;
+int temp[4][4];
 long score, totalLinesCleared;
 
 int bgInPlay[21][12];
@@ -111,7 +113,8 @@ void init()
 {
   srand(time(0));
   width = height = 1000;
-  fallTime = 300;
+  fallTime = slowFallTime = 300;
+  fastFallTime = 50;
   totalLinesCleared = level = quit = 0;
   memcpy(bgInPlay, bg, sizeof(int) * 21 * 12);
 
@@ -144,7 +147,7 @@ int legalMove(int xpos, int ypos, int shape[4][4])
 
 void rotate(int shape[4][4], int direction)
 {
-  int temp[4][4];
+  memset(temp, 0, sizeof(int) * 16);
   for (int i = 0; i < 4; i++) {
           for (int j = 0; j < 4; j++) {
 	          if (direction == 0) {
@@ -154,7 +157,6 @@ void rotate(int shape[4][4], int direction)
 		  }
 	  }
   }
-  memcpy(shape, temp, sizeof(int) * 16);
 }
 void freezeBlock()
 {
@@ -175,6 +177,7 @@ void freezeBlock()
 
 void gameOver()
 {
+  printf("Game over\n");
   for (;;) {
 	    if (SDL_PollEvent(&event) && 
 		event.type == SDL_QUIT) {
@@ -229,13 +232,18 @@ struct Block *swap(struct Block *b)
 
 void shiftRow(int row)
 {
-  printf("row complete\n");
   for (int j = row - 1; j > 0; j--) {
           for (int i = 1; i < 11; i++) {
 	          bgInPlay[j + 1][i] = bgInPlay[j][i];
 	  }
   }
 }
+
+void displayScore()
+{
+  printf("Current Score: %i\n", score);
+}
+
 
 void checkRows()
 {
@@ -249,33 +257,41 @@ void checkRows()
 	    }
 	    if (rowComplete) {
 	            linesCleared++;
-	            shiftRow(j);
+	            shiftRow(j++);
 	    }
   }
-  totalLinesCleared += linesCleared;
-  switch (linesCleared) {
-  case 1:
-          score += 40 * level;
-	  break;
-  case 2:
-          score += 100 * level;
-	  break;
-  case 3:
-          score += 300 * level;
-	  break;
-  case 4:
-          score += 1200 * level;
-	  break;
+  if (linesCleared) {
+          switch (linesCleared) {
+	  case 1:
+	          score += 40 * (level + 1);
+		  break;
+	  case 2:
+	          score += 100 * (level + 1);
+	          break;
+	  case 3:
+	          score += 300 * (level + 1);
+		  break;
+	  case 4:
+	          score += 1200 * (level + 1);
+		  break;
+	  }
+          displayScore();
+          totalLinesCleared += linesCleared;
   }
+  
 }
 
 void updateLevel()
 {
+  int temp = level;
   level = totalLinesCleared / 10;
+  if (level != temp) {
+          printf("level: %i\n", level);
+  }
   slowFallTime = 300 - (level * 25);
   fastFallTime = 50 - (level * 5);
   slowFallTime = 50 > slowFallTime ? 50 : slowFallTime;
-  fastFallTime = 10 > fastDallTime ? 10 : fastFallTime;
+  fastFallTime = 10 > fastFallTime ? 10 : fastFallTime;
 }
 
 void handleLogic()
@@ -310,15 +326,15 @@ void handleLogic()
   }
   if (pressedKeys[SDL_SCANCODE_W]) {
           rotate(b->shape, 0);
-	  if (!legalMove(b->x, b->y, b->shape)) {
-	          rotate(b->shape, 0);
+	  if (legalMove(b->x, b->y, temp)) {
+	          memcpy(b->shape, temp, sizeof(int) * 16);
 	  }
 	  pressedKeys[SDL_SCANCODE_W] = 0;
   }
   if (pressedKeys[SDL_SCANCODE_S]) {
           rotate(b->shape, 1);
-	  if (!legalMove(b->x, b->y, b->shape)) {
-	          rotate(b->shape, 1);
+	  if (legalMove(b->x, b->y, temp)) {
+	          memcpy(b->shape, temp, sizeof(int) * 16);
 	  }
 	  pressedKeys[SDL_SCANCODE_S] = 0;
   }
@@ -330,11 +346,11 @@ void handleLogic()
 	  pressedKeys[SDL_SCANCODE_F] = 0;
   }
   if (pressedKeys[SDL_SCANCODE_SPACE]) {
-	  fallTime = 50;
+	  fallTime = fastFallTime;
 	  pressedKeys[SDL_SCANCODE_SPACE] = 0;
   }
   if (releasedKeys[SDL_SCANCODE_SPACE]) {
-          fallTime = 300;
+          fallTime = slowFallTime;
 	  releasedKeys[SDL_SCANCODE_SPACE] = 0;
   }
   if (pressedKeys[SDL_SCANCODE_ESCAPE]) {
