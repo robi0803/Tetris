@@ -12,7 +12,8 @@ const int FPS = 60;
 const int MaxFPS = 1000 / FPS;
 int pressedKeys[SDL_NUM_SCANCODES];
 int releasedKeys[SDL_NUM_SCANCODES];
-int timeElapsed, fallTime;
+int timeElapsed, fallTime, quit, level;
+long score, totalLinesCleared;
 
 int bgInPlay[21][12];
 int bg[21][12] = {
@@ -86,14 +87,14 @@ int blocks[7][4][4] = {
 
 int currentBlock;
 struct Block { int x, y, color, shape[4][4]; };
-struct Block *blocksInPlay[50];
+struct Block *blocksInPlay[2];
 struct Block *newBlock(int i, int j)
 {
   struct Block *p = malloc(sizeof(struct Block));
   p->x = i;
   p->y = j;
-  p->color = rand() % 7;
-  memcpy(p->shape, blocks[p->color], sizeof(int) * 16);
+  p->color = (rand() % 7) + 1;
+  memcpy(p->shape, blocks[p->color - 1], sizeof(int) * 16);
   return p;
 }
 
@@ -111,6 +112,7 @@ void init()
   srand(time(0));
   width = height = 1000;
   fallTime = 300;
+  totalLinesCleared = level = quit = 0;
   memcpy(bgInPlay, bg, sizeof(int) * 21 * 12);
 
   if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -145,7 +147,7 @@ void rotate(int shape[4][4], int direction)
   int temp[4][4];
   for (int i = 0; i < 4; i++) {
           for (int j = 0; j < 4; j++) {
-	          if (direction = 0) {
+	          if (direction == 0) {
 		          temp[j][3 - i] = shape[i][j];
 		  } else {
 		          temp[i][j] = shape[j][3 - i];
@@ -154,7 +156,6 @@ void rotate(int shape[4][4], int direction)
   }
   memcpy(shape, temp, sizeof(int) * 16);
 }
-
 void freezeBlock()
 {
   int bgx, bgy;
@@ -163,9 +164,13 @@ void freezeBlock()
           for (int j = 0; j < 4; j++) {
 	          bgy = j + b->y;
 		  bgx = i + b->x + 1;
-	          bgInPlay[bgy][bgx] |= b->shape[j][i];
+		  if (b->shape[j][i]) {
+		          bgInPlay[bgy][bgx] = b->color;
+		  }
 	  }
   }
+  free(b);
+  blocksInPlay[currentBlock] = NULL;
 }
 
 void gameOver()
@@ -174,6 +179,8 @@ void gameOver()
 	    if (SDL_PollEvent(&event) && 
 		event.type == SDL_QUIT) {
 	              SDL_Quit();
+		      quit = 1;
+		      return;
 	    }
   }
 }
@@ -196,7 +203,7 @@ void reset()
 {
   memcpy(bgInPlay, bg, sizeof(int) * 21 * 12);
   fallTime = 300;
-  for (int i = 0; i < 50; i++) {
+  for (int i = 0; i < 2; i++) {
           if (blocksInPlay[i] != NULL) {
                   free(blocksInPlay[i]);
 		  blocksInPlay[i] = NULL;
@@ -205,41 +212,70 @@ void reset()
   dropBlock();
 }
 
-void swap(struct Block *b)
+struct Block *swap(struct Block *b)
 {
-}
-
-void shiftRow3(struct Block *b, int row)
-{
-}
-
-void shiftRow2(struct Block *b, int row)
-{
-  if (b->y > row + 4) {
-          return;
-  } else if (b->y < row - 4) {
-          b->y++;
+  int toSwap = (currentBlock + 1) % 2;
+  if (blocksInPlay[toSwap] == NULL) {
+          dropBlock();
   } else {
-          shiftRow3(b, row);
+          blocksInPlay[toSwap]->x = b->x;
+	  blocksInPlay[toSwap]->y = b->y;
   }
+  b->x = -6;
+  b->y = 0;
+  currentBlock = toSwap;
+  return blocksInPlay[currentBlock];
 }
 
 void shiftRow(int row)
 {
-  for (int i = 0; i < 50; i++) {
-            if (blocksInPlay[i] != NULL) {
-	              shiftRow2(blocksInPlay[i], row); 
-	    }
+  printf("row complete\n");
+  for (int j = row - 1; j > 0; j--) {
+          for (int i = 1; i < 11; i++) {
+	          bgInPlay[j + 1][i] = bgInPlay[j][i];
+	  }
   }
 }
 
 void checkRows()
 {
-  for (int i = 0; i < 20; i++) {
-            if (bgInPlay[i] == bgInPlay[20]) {
-	            shiftRow(i);
+  int rowComplete, linesCleared = 0;
+  for (int j = 19; j > 0; j--) {
+            rowComplete = 1;
+            for (int i = 1; i < 11; i++) {
+	            if (bgInPlay[j][i] == 0) {
+		            rowComplete = 0;
+		    }
+	    }
+	    if (rowComplete) {
+	            linesCleared++;
+	            shiftRow(j);
 	    }
   }
+  totalLinesCleared += linesCleared;
+  switch (linesCleared) {
+  case 1:
+          score += 40 * level;
+	  break;
+  case 2:
+          score += 100 * level;
+	  break;
+  case 3:
+          score += 300 * level;
+	  break;
+  case 4:
+          score += 1200 * level;
+	  break;
+  }
+}
+
+void updateLevel()
+{
+  level = totalLinesCleared / 10;
+  slowFallTime = 300 - (level * 25);
+  fastFallTime = 50 - (level * 5);
+  slowFallTime = 50 > slowFallTime ? 50 : slowFallTime;
+  fastFallTime = 10 > fastDallTime ? 10 : fastFallTime;
 }
 
 void handleLogic()
@@ -254,6 +290,7 @@ void handleLogic()
 		  break;
 	  case SDL_QUIT:
 	          SDL_Quit();
+		  quit = 1;
 		  break;
 	  }
   }
@@ -274,19 +311,19 @@ void handleLogic()
   if (pressedKeys[SDL_SCANCODE_W]) {
           rotate(b->shape, 0);
 	  if (!legalMove(b->x, b->y, b->shape)) {
-	          rotate(b->shape, 1);
+	          rotate(b->shape, 0);
 	  }
 	  pressedKeys[SDL_SCANCODE_W] = 0;
   }
   if (pressedKeys[SDL_SCANCODE_S]) {
           rotate(b->shape, 1);
 	  if (!legalMove(b->x, b->y, b->shape)) {
-	          rotate(b->shape, 0);
+	          rotate(b->shape, 1);
 	  }
 	  pressedKeys[SDL_SCANCODE_S] = 0;
   }
   if (pressedKeys[SDL_SCANCODE_F]) {
-          swap(b);
+          b = swap(b);
 	  if (!legalMove(b->x, b->y, b->shape)) {
 	          swap(b);
 	  }
@@ -310,6 +347,7 @@ void handleLogic()
   } else if (timeElapsed > fallTime) {
           freezeBlock(b);
 	  checkRows();
+	  updateLevel();
 	  dropBlock();
   }
 }
@@ -333,10 +371,10 @@ void renderBG()
 
   // hold
   SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
-  fill(50, 100, 250, 101);
-  fill(50, 300, 250, 301);
-  fill(50, 100, 51, 301);
-  fill(250, 100, 251, 301);
+  fill(60, 100, 220, 101);
+  fill(60, 260, 220, 261);
+  fill(60, 100, 61, 261);
+  fill(220, 100, 221, 261);
 }
 
 void setColor(int color)
@@ -344,26 +382,26 @@ void setColor(int color)
   int r, g, b;
   r = g = b = 0;
   switch (color) {
-  case 0: // o
+  case 1: // o
           r = g = 255;
           break;
-  case 1: // i
+  case 2: // i
           g = b = 255;
 	  break;
-  case 2: // l
+  case 3: // l
           r = 255;
 	  g = 128;
           break;
-  case 3: // j
+  case 4: // j
           b = 255;
           break;
-  case 4: // s
+  case 5: // s
           g = 255;
 	  break;
-  case 5: // z
+  case 6: // z
           r = 255;
           break;
-  case 6: // t
+  case 7: // t
           r = b = 150;
           break;
   }
@@ -391,11 +429,29 @@ void drawBlock(struct Block *block)
   }
 }
 
-void renderBlocks()
+void renderLiveBlocks()
 {
-  for (int i = 0; i < 50; i++) {
+  for (int i = 0; i < 2; i++) {
           if (blocksInPlay[i] != NULL) {
 	          drawBlock(blocksInPlay[i]);
+	  }
+  }
+}
+
+void renderDeadBlocks()
+{
+  int x = 300, y = 100;
+  int x1, y1, x2, y2;
+  for (int i = 1; i < 11; i++) {
+          for (int j = 0; j < 20; j++) {
+	          if (bgInPlay[j][i]) {
+		    setColor(bgInPlay[j][i]);
+		    x1 = x + ((i - 1) * 40);
+		    y1 = y + (j * 40);
+		    x2 = x1 + 40;
+		    y2 = y1 + 40;
+		    fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1);
+		  }
 	  }
   }
 }
@@ -405,7 +461,8 @@ void renderImage()
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
   SDL_RenderClear(renderer);
   renderBG();
-  renderBlocks();
+  renderLiveBlocks();
+  renderDeadBlocks();
   SDL_RenderPresent(renderer);
 }
 
@@ -423,6 +480,10 @@ int main()
 	  elapsed = elapsed < MaxFPS ? elapsed : MaxFPS;
 	  startTime = endTime;
 	  timeElapsed += elapsed;
+
+	  if (quit) {
+	          return 0;
+	  }
   }
   return 0;
 }
