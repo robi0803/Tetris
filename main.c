@@ -1,104 +1,4 @@
-#include <SDL.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-
-SDL_Window *window;
-SDL_Renderer *renderer;
-SDL_Event event;
-int width, height;
-
-const int FPS = 60;
-const int MaxFPS = 1000 / FPS;
-int pressedKeys[SDL_NUM_SCANCODES];
-int releasedKeys[SDL_NUM_SCANCODES];
-int slowFallTime, fastFallTime, fallTime;
-int timeElapsed, quit, level;
-int temp[4][4];
-long score, totalLinesCleared;
-
-int bgInPlay[21][12];
-int bg[21][12] = {
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 1
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 2
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 3
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 4
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 5
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 6
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 7
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 8
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 9
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 10
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 11
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 12
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 13
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 14
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 15
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 16
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 17
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 18
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 19
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, // 20
-  {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // 21
-};
-
-int blocks[7][4][4] = {
-  { // o
-          {0, 0, 0, 0},
-          {0, 1, 1, 0},
-	  {0, 1, 1, 0},
-	  {0, 0, 0, 0}
-  },
-  { // i
-          {0, 0, 1, 0},
-	  {0, 0, 1, 0},
-	  {0, 0, 1, 0},
-	  {0, 0, 1, 0}
-  },
-  { // l
-          {0, 1, 0, 0},
-	  {0, 1, 0, 0},
-	  {0, 1, 0, 0},
-	  {0, 1, 1, 0}
-  },
-  { // j
-          {0, 0, 1, 0},
-	  {0, 0, 1, 0},
-	  {0, 0, 1, 0}, 
-	  {0, 1, 1, 0}
-  },
-  { // s
-          {0, 0, 0, 0},
-	  {0, 0, 1, 1},
-	  {0, 1, 1, 0},
-	  {0, 0, 0, 0}
-  },
-  { // z
-          {0, 0, 0, 0},
-	  {0, 1, 1, 0},
-	  {0, 0, 1, 1},
-	  {0, 0, 0, 0}
-  },
-  { // t
-          {0, 0, 0, 0},
-	  {0, 1, 1, 1},
-	  {0, 0, 1, 0},
-	  {0, 0, 0, 0}
-  }
-};
-
-int currentBlock;
-struct Block { int x, y, color, shape[4][4]; };
-struct Block *blocksInPlay[2];
-struct Block *newBlock(int i, int j)
-{
-  struct Block *p = malloc(sizeof(struct Block));
-  p->x = i;
-  p->y = j;
-  p->color = (rand() % 7) + 1;
-  memcpy(p->shape, blocks[p->color - 1], sizeof(int) * 16);
-  return p;
-}
+#include "main.h"
 
 void fill(int x1, int y1, int x2, int y2)
 {
@@ -145,23 +45,38 @@ int legalMove(int xpos, int ypos, int shape[4][4])
   return 1;
 }
 
-void rotate(int shape[4][4], int direction)
+void rotate(Block *b, int key)
 {
-  memset(temp, 0, sizeof(int) * 16);
+  int temp[4][4];
   for (int i = 0; i < 4; i++) {
           for (int j = 0; j < 4; j++) {
-	          if (direction == 0) {
-		          temp[j][3 - i] = shape[i][j];
+	          if (key == SDL_SCANCODE_W) {
+		          temp[j][3 - i] = b->shape[i][j];
 		  } else {
-		          temp[i][j] = shape[j][3 - i];
+		          temp[i][j] = b->shape[j][3 - i];
 		  }
 	  }
   }
+  if (legalMove(b->x, b->y, temp)) {
+          memcpy(b->shape, temp, sizeof(int) * 16);
+  }
+  pressedKeys[key] = 0;
 }
+
+void move(Block *b, int newX, int newY, int key)
+{
+  if (legalMove(newX, newY, b->shape)) {
+          b->x = newX;
+	  b->y = newY;
+  }
+  pressedKeys[key] = 0;
+}
+
+
 void freezeBlock()
 {
   int bgx, bgy;
-  struct Block *b = blocksInPlay[currentBlock];
+  Block *b = blocksInPlay[currentBlock];
   for (int i = 0; i < 4; i++) {
           for (int j = 0; j < 4; j++) {
 	          bgy = j + b->y;
@@ -192,10 +107,9 @@ void dropBlock()
 {
   int i = -1;
   while (blocksInPlay[++i] != NULL);
-  struct Block *b = newBlock(4, -1);
+  Block *b = newBlock(4, -1);
   if (legalMove(b->x, b->y, b->shape)) {
-          currentBlock = i;
-          blocksInPlay[currentBlock] = b;
+          blocksInPlay[currentBlock = i] = b;
   } else {
           free(b);
           gameOver();
@@ -205,7 +119,9 @@ void dropBlock()
 void reset()
 {
   memcpy(bgInPlay, bg, sizeof(int) * 21 * 12);
-  fallTime = 300;
+  slowFallTime = fallTime = 300;
+  fastFallTime = 50;
+  score = 0;
   for (int i = 0; i < 2; i++) {
           if (blocksInPlay[i] != NULL) {
                   free(blocksInPlay[i]);
@@ -215,19 +131,22 @@ void reset()
   dropBlock();
 }
 
-struct Block *swap(struct Block *b)
+void swap(Block *b)
 {
+  pressedKeys[SDL_SCANCODE_F] = 0;
   int toSwap = (currentBlock + 1) % 2;
   if (blocksInPlay[toSwap] == NULL) {
           dropBlock();
-  } else {
+  } else if (legalMove(b->x, b->y, blocksInPlay[toSwap]->shape)) {
           blocksInPlay[toSwap]->x = b->x;
 	  blocksInPlay[toSwap]->y = b->y;
+  } else {
+          return;
   }
   b->x = -6;
   b->y = 0;
+  b = blocksInPlay[currentBlock];
   currentBlock = toSwap;
-  return blocksInPlay[currentBlock];
 }
 
 void shiftRow(int row)
@@ -238,12 +157,6 @@ void shiftRow(int row)
 	  }
   }
 }
-
-void displayScore()
-{
-  printf("Current Score: %i\n", score);
-}
-
 
 void checkRows()
 {
@@ -275,7 +188,7 @@ void checkRows()
 	          score += 1200 * (level + 1);
 		  break;
 	  }
-          displayScore();
+          printf("Current Score: %i\n", score);
           totalLinesCleared += linesCleared;
   }
   
@@ -294,6 +207,7 @@ void updateLevel()
   fastFallTime = 10 > fastFallTime ? 10 : fastFallTime;
 }
 
+
 void handleLogic()
 {
   if (SDL_PollEvent(&event)) {
@@ -311,39 +225,29 @@ void handleLogic()
 	  }
   }
   
-  struct Block *b = blocksInPlay[currentBlock];
+  Block *b = blocksInPlay[currentBlock];
   if (pressedKeys[SDL_SCANCODE_A]) {
-          if (legalMove(b->x - 1, b->y, b->shape)) {
-	          b->x--;
-	  }
-	  pressedKeys[SDL_SCANCODE_A] = 0;
+          move(b,
+	       b->x - 1,
+	       b->y,
+	       SDL_SCANCODE_A);
   }
   if (pressedKeys[SDL_SCANCODE_D]) {
-          if (legalMove(b->x + 1, b->y, b->shape)) {
-	          b->x++;
-	  }
-	  pressedKeys[SDL_SCANCODE_D] = 0;
+          move(b,
+	       b->x + 1,
+	       b->y,
+	       SDL_SCANCODE_D);
   }
   if (pressedKeys[SDL_SCANCODE_W]) {
-          rotate(b->shape, 0);
-	  if (legalMove(b->x, b->y, temp)) {
-	          memcpy(b->shape, temp, sizeof(int) * 16);
-	  }
-	  pressedKeys[SDL_SCANCODE_W] = 0;
+          rotate(b,
+		 SDL_SCANCODE_W);
   }
   if (pressedKeys[SDL_SCANCODE_S]) {
-          rotate(b->shape, 1);
-	  if (legalMove(b->x, b->y, temp)) {
-	          memcpy(b->shape, temp, sizeof(int) * 16);
-	  }
-	  pressedKeys[SDL_SCANCODE_S] = 0;
+          rotate(b,
+		 SDL_SCANCODE_S);
   }
   if (pressedKeys[SDL_SCANCODE_F]) {
-          b = swap(b);
-	  if (!legalMove(b->x, b->y, b->shape)) {
-	          swap(b);
-	  }
-	  pressedKeys[SDL_SCANCODE_F] = 0;
+          swap(b);
   }
   if (pressedKeys[SDL_SCANCODE_SPACE]) {
 	  fallTime = fastFallTime;
@@ -424,7 +328,7 @@ void setColor(int color)
   SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 }
 
-void drawBlock(struct Block *block)
+void drawBlock(Block *block)
 {
   setColor(block->color);
   int x = block->x;
@@ -461,12 +365,12 @@ void renderDeadBlocks()
   for (int i = 1; i < 11; i++) {
           for (int j = 0; j < 20; j++) {
 	          if (bgInPlay[j][i]) {
-		    setColor(bgInPlay[j][i]);
-		    x1 = x + ((i - 1) * 40);
-		    y1 = y + (j * 40);
-		    x2 = x1 + 40;
-		    y2 = y1 + 40;
-		    fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1);
+		          setColor(bgInPlay[j][i]);
+			  x1 = x + ((i - 1) * 40);
+			  y1 = y + (j * 40);
+			  x2 = x1 + 40;
+			  y2 = y1 + 40;
+			  fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1);
 		  }
 	  }
   }
@@ -487,19 +391,14 @@ int main()
   init();
   int startTime = SDL_GetTicks(), endTime, elapsed;
   dropBlock();
-  for (;;) {
+  while (!quit) {
           handleLogic();
-          renderImage();
-
+	  renderImage();
+	  
 	  endTime = SDL_GetTicks();
 	  elapsed = endTime - startTime;
-	  elapsed = elapsed < MaxFPS ? elapsed : MaxFPS;
 	  startTime = endTime;
 	  timeElapsed += elapsed;
-
-	  if (quit) {
-	          return 0;
-	  }
   }
   return 0;
 }
